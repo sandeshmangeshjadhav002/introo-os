@@ -25,19 +25,24 @@ CREATE INDEX IF NOT EXISTS idx_tags_name ON public.tags(name);
 -- Enable RLS
 ALTER TABLE public.tags ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Users can view tags in their organization" ON public.tags;
 CREATE POLICY "Users can view tags in their organization" ON public.tags
     FOR SELECT USING (organization_id = current_organization_id());
 
+DROP POLICY IF EXISTS "Users can create tags" ON public.tags;
 CREATE POLICY "Users can create tags" ON public.tags
     FOR INSERT WITH CHECK (organization_id = current_organization_id());
 
+DROP POLICY IF EXISTS "Users can update tags" ON public.tags;
 CREATE POLICY "Users can update tags" ON public.tags
     FOR UPDATE USING (organization_id = current_organization_id());
 
+DROP POLICY IF EXISTS "Admins and managers can delete tags" ON public.tags;
 CREATE POLICY "Admins and managers can delete tags" ON public.tags
     FOR DELETE USING (organization_id = current_organization_id() AND (current_user_role() = 'super_admin' OR current_user_role() = 'admin' OR current_user_role() = 'manager'));
 
 -- Triggers
+DROP TRIGGER IF EXISTS set_tags_updated_at ON public.tags;
 CREATE TRIGGER set_tags_updated_at
     BEFORE UPDATE ON public.tags
     FOR EACH ROW EXECUTE FUNCTION handle_updated_at();
@@ -83,19 +88,24 @@ CREATE INDEX IF NOT EXISTS idx_contacts_email ON public.contacts(email);
 ALTER TABLE public.contacts ENABLE ROW LEVEL SECURITY;
 
 -- Contacts RLS policies
+DROP POLICY IF EXISTS "Users can view contacts in their organization" ON public.contacts;
 CREATE POLICY "Users can view contacts in their organization" ON public.contacts
     FOR SELECT USING (organization_id = current_organization_id());
 
+DROP POLICY IF EXISTS "Users can create contacts" ON public.contacts;
 CREATE POLICY "Users can create contacts" ON public.contacts
     FOR INSERT WITH CHECK (organization_id = current_organization_id());
 
+DROP POLICY IF EXISTS "Users can update contacts" ON public.contacts;
 CREATE POLICY "Users can update contacts" ON public.contacts
     FOR UPDATE USING (organization_id = current_organization_id());
 
+DROP POLICY IF EXISTS "Admins and managers can delete contacts" ON public.contacts;
 CREATE POLICY "Admins and managers can delete contacts" ON public.contacts
     FOR DELETE USING (organization_id = current_organization_id() AND (current_user_role() = 'super_admin' OR current_user_role() = 'admin' OR current_user_role() = 'manager'));
 
 -- Contacts triggers
+DROP TRIGGER IF EXISTS set_contacts_updated_at ON public.contacts;
 CREATE TRIGGER set_contacts_updated_at
     BEFORE UPDATE ON public.contacts
     FOR EACH ROW EXECUTE FUNCTION handle_updated_at();
@@ -122,19 +132,24 @@ CREATE INDEX IF NOT EXISTS idx_deal_stages_position ON public.deal_stages(positi
 -- Enable RLS
 ALTER TABLE public.deal_stages ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Users can view deal stages in their organization" ON public.deal_stages;
 CREATE POLICY "Users can view deal stages in their organization" ON public.deal_stages
     FOR SELECT USING (organization_id = current_organization_id());
 
+DROP POLICY IF EXISTS "Admins and managers can create deal stages" ON public.deal_stages;
 CREATE POLICY "Admins and managers can create deal stages" ON public.deal_stages
     FOR INSERT WITH CHECK (organization_id = current_organization_id() AND (current_user_role() = 'super_admin' OR current_user_role() = 'admin' OR current_user_role() = 'manager'));
 
+DROP POLICY IF EXISTS "Admins and managers can update deal stages" ON public.deal_stages;
 CREATE POLICY "Admins and managers can update deal stages" ON public.deal_stages
     FOR UPDATE USING (organization_id = current_organization_id() AND (current_user_role() = 'super_admin' OR current_user_role() = 'admin' OR current_user_role() = 'manager'));
 
+DROP POLICY IF EXISTS "Admins can delete deal stages" ON public.deal_stages;
 CREATE POLICY "Admins can delete deal stages" ON public.deal_stages
     FOR DELETE USING (organization_id = current_organization_id() AND (current_user_role() = 'super_admin' OR current_user_role() = 'admin'));
 
 -- Deal stages triggers
+DROP TRIGGER IF EXISTS set_deal_stages_updated_at ON public.deal_stages;
 CREATE TRIGGER set_deal_stages_updated_at
     BEFORE UPDATE ON public.deal_stages
     FOR EACH ROW EXECUTE FUNCTION handle_updated_at();
@@ -172,19 +187,24 @@ CREATE INDEX IF NOT EXISTS idx_deals_status ON public.deals(status);
 -- Enable RLS
 ALTER TABLE public.deals ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Users can view deals in their organization" ON public.deals;
 CREATE POLICY "Users can view deals in their organization" ON public.deals
     FOR SELECT USING (organization_id = current_organization_id());
 
+DROP POLICY IF EXISTS "Users can create deals" ON public.deals;
 CREATE POLICY "Users can create deals" ON public.deals
     FOR INSERT WITH CHECK (organization_id = current_organization_id());
 
+DROP POLICY IF EXISTS "Users can update deals" ON public.deals;
 CREATE POLICY "Users can update deals" ON public.deals
     FOR UPDATE USING (organization_id = current_organization_id());
 
+DROP POLICY IF EXISTS "Admins and managers can delete deals" ON public.deals;
 CREATE POLICY "Admins and managers can delete deals" ON public.deals
     FOR DELETE USING (organization_id = current_organization_id() AND (current_user_role() = 'super_admin' OR current_user_role() = 'admin' OR current_user_role() = 'manager'));
 
 -- Deals triggers
+DROP TRIGGER IF EXISTS set_deals_updated_at ON public.deals;
 CREATE TRIGGER set_deals_updated_at
     BEFORE UPDATE ON public.deals
     FOR EACH ROW EXECUTE FUNCTION handle_updated_at();
@@ -222,15 +242,19 @@ CREATE INDEX IF NOT EXISTS idx_activities_due_date ON public.activities(due_date
 -- Enable RLS
 ALTER TABLE public.activities ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Users can view activities in their organization" ON public.activities;
 CREATE POLICY "Users can view activities in their organization" ON public.activities
     FOR SELECT USING (organization_id = current_organization_id());
 
+DROP POLICY IF EXISTS "Users can create activities" ON public.activities;
 CREATE POLICY "Users can create activities" ON public.activities
     FOR INSERT WITH CHECK (organization_id = current_organization_id());
 
+DROP POLICY IF EXISTS "Users can update activities" ON public.activities;
 CREATE POLICY "Users can update activities" ON public.activities
     FOR UPDATE USING (organization_id = current_organization_id());
 
+DROP POLICY IF EXISTS "Users can delete their own activities, admins can delete any" ON public.activities;
 CREATE POLICY "Users can delete their own activities, admins can delete any" ON public.activities
     FOR DELETE USING (
         organization_id = current_organization_id() AND 
@@ -238,6 +262,7 @@ CREATE POLICY "Users can delete their own activities, admins can delete any" ON 
     );
 
 -- Activities triggers
+DROP TRIGGER IF EXISTS set_activities_updated_at ON public.activities;
 CREATE TRIGGER set_activities_updated_at
     BEFORE UPDATE ON public.activities
     FOR EACH ROW EXECUTE FUNCTION handle_updated_at();
@@ -280,7 +305,8 @@ BEGIN
         (NEW.id, 'Proposal', 3, '#f59e0b', 50, FALSE),
         (NEW.id, 'Negotiation', 4, '#f97316', 75, FALSE),
         (NEW.id, 'Closed Won', 5, '#10b981', 100, TRUE),
-        (NEW.id, 'Closed Lost', 6, '#ef4444', 0, TRUE);
+        (NEW.id, 'Closed Lost', 6, '#ef4444', 0, TRUE)
+    ON CONFLICT (organization_id, name) DO NOTHING;
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;

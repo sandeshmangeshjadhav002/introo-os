@@ -2,6 +2,20 @@
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
+-- Create helper function to check if table is in publication
+CREATE OR REPLACE FUNCTION public.is_table_in_publication(pub_name text, schema_name text, table_name text)
+RETURNS boolean AS $$
+BEGIN
+  RETURN EXISTS (
+    SELECT 1
+    FROM pg_publication_tables
+    WHERE pubname = pub_name
+      AND schemaname = schema_name
+      AND tablename = table_name
+  );
+END;
+$$ LANGUAGE plpgsql;
+
 -- Create updated_at trigger function
 CREATE OR REPLACE FUNCTION public.handle_updated_at()
 RETURNS TRIGGER AS $$
@@ -52,16 +66,20 @@ CREATE INDEX IF NOT EXISTS idx_organizations_created_at ON public.organizations(
 ALTER TABLE public.organizations ENABLE ROW LEVEL SECURITY;
 
 -- Organizations RLS policies
+DROP POLICY IF EXISTS "Users can view their own organization" ON public.organizations;
 CREATE POLICY "Users can view their own organization" ON public.organizations
   FOR SELECT USING (id = current_organization_id());
 
+DROP POLICY IF EXISTS "Super admins can create organizations" ON public.organizations;
 CREATE POLICY "Super admins can create organizations" ON public.organizations
   FOR INSERT WITH CHECK (current_user_role() = 'super_admin');
 
+DROP POLICY IF EXISTS "Super admins and admins can update organizations" ON public.organizations;
 CREATE POLICY "Super admins and admins can update organizations" ON public.organizations
   FOR UPDATE USING (id = current_organization_id() AND (current_user_role() = 'super_admin' OR current_user_role() = 'admin'));
 
 -- Organizations triggers
+DROP TRIGGER IF EXISTS set_organizations_updated_at ON public.organizations;
 CREATE TRIGGER set_organizations_updated_at
   BEFORE UPDATE ON public.organizations
   FOR EACH ROW EXECUTE FUNCTION handle_updated_at();
@@ -90,19 +108,24 @@ CREATE INDEX IF NOT EXISTS idx_users_email ON public.users(email);
 ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
 
 -- Users RLS policies
+DROP POLICY IF EXISTS "Users can view all users in their organization" ON public.users;
 CREATE POLICY "Users can view all users in their organization" ON public.users
   FOR SELECT USING (organization_id = current_organization_id());
 
+DROP POLICY IF EXISTS "Users can update their own profile" ON public.users;
 CREATE POLICY "Users can update their own profile" ON public.users
   FOR UPDATE USING (id = auth.uid());
 
+DROP POLICY IF EXISTS "Admins and managers can create users" ON public.users;
 CREATE POLICY "Admins and managers can create users" ON public.users
   FOR INSERT WITH CHECK (organization_id = current_organization_id() AND (current_user_role() = 'super_admin' OR current_user_role() = 'admin' OR current_user_role() = 'manager'));
 
+DROP POLICY IF EXISTS "Admins can update and delete users" ON public.users;
 CREATE POLICY "Admins can update and delete users" ON public.users
   FOR ALL USING (organization_id = current_organization_id() AND (current_user_role() = 'super_admin' OR current_user_role() = 'admin'));
 
 -- Users triggers
+DROP TRIGGER IF EXISTS set_users_updated_at ON public.users;
 CREATE TRIGGER set_users_updated_at
   BEFORE UPDATE ON public.users
   FOR EACH ROW EXECUTE FUNCTION handle_updated_at();
@@ -117,11 +140,13 @@ BEGIN
     NEW.email,
     NEW.raw_user_meta_data->>'full_name',
     COALESCE(NEW.raw_user_meta_data->>'role', 'employee')
-  );
+  )
+  ON CONFLICT (id) DO NOTHING;
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 CREATE OR REPLACE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
   FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
@@ -150,19 +175,24 @@ CREATE INDEX IF NOT EXISTS idx_clients_status ON public.clients(status);
 ALTER TABLE public.clients ENABLE ROW LEVEL SECURITY;
 
 -- Clients RLS policies
+DROP POLICY IF EXISTS "Users can view clients in their organization" ON public.clients;
 CREATE POLICY "Users can view clients in their organization" ON public.clients
   FOR SELECT USING (organization_id = current_organization_id());
 
+DROP POLICY IF EXISTS "Users can create clients" ON public.clients;
 CREATE POLICY "Users can create clients" ON public.clients
   FOR INSERT WITH CHECK (organization_id = current_organization_id());
 
+DROP POLICY IF EXISTS "Users can update clients" ON public.clients;
 CREATE POLICY "Users can update clients" ON public.clients
   FOR UPDATE USING (organization_id = current_organization_id());
 
+DROP POLICY IF EXISTS "Admins and managers can delete clients" ON public.clients;
 CREATE POLICY "Admins and managers can delete clients" ON public.clients
   FOR DELETE USING (organization_id = current_organization_id() AND (current_user_role() = 'super_admin' OR current_user_role() = 'admin' OR current_user_role() = 'manager'));
 
 -- Clients triggers
+DROP TRIGGER IF EXISTS set_clients_updated_at ON public.clients;
 CREATE TRIGGER set_clients_updated_at
   BEFORE UPDATE ON public.clients
   FOR EACH ROW EXECUTE FUNCTION handle_updated_at();
@@ -191,19 +221,24 @@ CREATE INDEX IF NOT EXISTS idx_leads_assigned_to ON public.leads(assigned_to);
 ALTER TABLE public.leads ENABLE ROW LEVEL SECURITY;
 
 -- Leads RLS policies
+DROP POLICY IF EXISTS "Users can view leads in their organization" ON public.leads;
 CREATE POLICY "Users can view leads in their organization" ON public.leads
   FOR SELECT USING (organization_id = current_organization_id());
 
+DROP POLICY IF EXISTS "Users can create leads" ON public.leads;
 CREATE POLICY "Users can create leads" ON public.leads
   FOR INSERT WITH CHECK (organization_id = current_organization_id());
 
+DROP POLICY IF EXISTS "Users can update leads" ON public.leads;
 CREATE POLICY "Users can update leads" ON public.leads
   FOR UPDATE USING (organization_id = current_organization_id());
 
+DROP POLICY IF EXISTS "Admins and managers can delete leads" ON public.leads;
 CREATE POLICY "Admins and managers can delete leads" ON public.leads
   FOR DELETE USING (organization_id = current_organization_id() AND (current_user_role() = 'super_admin' OR current_user_role() = 'admin' OR current_user_role() = 'manager'));
 
 -- Leads triggers
+DROP TRIGGER IF EXISTS set_leads_updated_at ON public.leads;
 CREATE TRIGGER set_leads_updated_at
   BEFORE UPDATE ON public.leads
   FOR EACH ROW EXECUTE FUNCTION handle_updated_at();
@@ -234,19 +269,24 @@ CREATE INDEX IF NOT EXISTS idx_projects_created_by ON public.projects(created_by
 ALTER TABLE public.projects ENABLE ROW LEVEL SECURITY;
 
 -- Projects RLS policies
+DROP POLICY IF EXISTS "Users can view projects in their organization" ON public.projects;
 CREATE POLICY "Users can view projects in their organization" ON public.projects
   FOR SELECT USING (organization_id = current_organization_id());
 
+DROP POLICY IF EXISTS "Users can create projects" ON public.projects;
 CREATE POLICY "Users can create projects" ON public.projects
   FOR INSERT WITH CHECK (organization_id = current_organization_id());
 
+DROP POLICY IF EXISTS "Users can update projects" ON public.projects;
 CREATE POLICY "Users can update projects" ON public.projects
   FOR UPDATE USING (organization_id = current_organization_id());
 
+DROP POLICY IF EXISTS "Admins and managers can delete projects" ON public.projects;
 CREATE POLICY "Admins and managers can delete projects" ON public.projects
   FOR DELETE USING (organization_id = current_organization_id() AND (current_user_role() = 'super_admin' OR current_user_role() = 'admin' OR current_user_role() = 'manager'));
 
 -- Projects triggers
+DROP TRIGGER IF EXISTS set_projects_updated_at ON public.projects;
 CREATE TRIGGER set_projects_updated_at
   BEFORE UPDATE ON public.projects
   FOR EACH ROW EXECUTE FUNCTION handle_updated_at();
@@ -288,9 +328,11 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql STABLE;
 
+DROP POLICY IF EXISTS "Users can view tasks in their organization" ON public.tasks;
 CREATE POLICY "Users can view tasks in their organization" ON public.tasks
   FOR SELECT USING (task_belongs_to_organization(id));
 
+DROP POLICY IF EXISTS "Users can create tasks" ON public.tasks;
 CREATE POLICY "Users can create tasks" ON public.tasks
   FOR INSERT WITH CHECK (
     EXISTS (
@@ -299,9 +341,11 @@ CREATE POLICY "Users can create tasks" ON public.tasks
     )
   );
 
+DROP POLICY IF EXISTS "Users can update tasks" ON public.tasks;
 CREATE POLICY "Users can update tasks" ON public.tasks
   FOR UPDATE USING (task_belongs_to_organization(id));
 
+DROP POLICY IF EXISTS "Admins and managers can delete tasks" ON public.tasks;
 CREATE POLICY "Admins and managers can delete tasks" ON public.tasks
   FOR DELETE USING (
     task_belongs_to_organization(id) AND
@@ -309,6 +353,7 @@ CREATE POLICY "Admins and managers can delete tasks" ON public.tasks
   );
 
 -- Tasks triggers
+DROP TRIGGER IF EXISTS set_tasks_updated_at ON public.tasks;
 CREATE TRIGGER set_tasks_updated_at
   BEFORE UPDATE ON public.tasks
   FOR EACH ROW EXECUTE FUNCTION handle_updated_at();
@@ -337,19 +382,24 @@ CREATE INDEX IF NOT EXISTS idx_employees_department ON public.employees(departme
 ALTER TABLE public.employees ENABLE ROW LEVEL SECURITY;
 
 -- Employees RLS policies
+DROP POLICY IF EXISTS "Users can view employees in their organization" ON public.employees;
 CREATE POLICY "Users can view employees in their organization" ON public.employees
   FOR SELECT USING (organization_id = current_organization_id());
 
+DROP POLICY IF EXISTS "Admins and managers can create employees" ON public.employees;
 CREATE POLICY "Admins and managers can create employees" ON public.employees
   FOR INSERT WITH CHECK (organization_id = current_organization_id() AND (current_user_role() = 'super_admin' OR current_user_role() = 'admin' OR current_user_role() = 'manager'));
 
+DROP POLICY IF EXISTS "Admins and managers can update employees" ON public.employees;
 CREATE POLICY "Admins and managers can update employees" ON public.employees
   FOR UPDATE USING (organization_id = current_organization_id() AND (current_user_role() = 'super_admin' OR current_user_role() = 'admin' OR current_user_role() = 'manager'));
 
+DROP POLICY IF EXISTS "Admins can delete employees" ON public.employees;
 CREATE POLICY "Admins can delete employees" ON public.employees
   FOR DELETE USING (organization_id = current_organization_id() AND (current_user_role() = 'super_admin' OR current_user_role() = 'admin'));
 
 -- Employees triggers
+DROP TRIGGER IF EXISTS set_employees_updated_at ON public.employees;
 CREATE TRIGGER set_employees_updated_at
   BEFORE UPDATE ON public.employees
   FOR EACH ROW EXECUTE FUNCTION handle_updated_at();
@@ -388,9 +438,11 @@ END;
 $$ LANGUAGE plpgsql STABLE;
 
 -- Attendance RLS policies
+DROP POLICY IF EXISTS "Users can view attendance in their organization" ON public.attendance;
 CREATE POLICY "Users can view attendance in their organization" ON public.attendance
   FOR SELECT USING (attendance_belongs_to_organization(id));
 
+DROP POLICY IF EXISTS "Admins, managers, and employees can create attendance" ON public.attendance;
 CREATE POLICY "Admins, managers, and employees can create attendance" ON public.attendance
   FOR INSERT WITH CHECK (
     EXISTS (
@@ -399,9 +451,11 @@ CREATE POLICY "Admins, managers, and employees can create attendance" ON public.
     )
   );
 
+DROP POLICY IF EXISTS "Admins, managers, and employees can update attendance" ON public.attendance;
 CREATE POLICY "Admins, managers, and employees can update attendance" ON public.attendance
   FOR UPDATE USING (attendance_belongs_to_organization(id));
 
+DROP POLICY IF EXISTS "Admins and managers can delete attendance" ON public.attendance;
 CREATE POLICY "Admins and managers can delete attendance" ON public.attendance
   FOR DELETE USING (
     attendance_belongs_to_organization(id) AND
@@ -409,6 +463,7 @@ CREATE POLICY "Admins and managers can delete attendance" ON public.attendance
   );
 
 -- Attendance triggers
+DROP TRIGGER IF EXISTS set_attendance_updated_at ON public.attendance;
 CREATE TRIGGER set_attendance_updated_at
   BEFORE UPDATE ON public.attendance
   FOR EACH ROW EXECUTE FUNCTION handle_updated_at();
@@ -448,9 +503,11 @@ END;
 $$ LANGUAGE plpgsql STABLE;
 
 -- Leave Requests RLS policies
+DROP POLICY IF EXISTS "Users can view leave requests in their organization" ON public.leave_requests;
 CREATE POLICY "Users can view leave requests in their organization" ON public.leave_requests
   FOR SELECT USING (leave_request_belongs_to_organization(id));
 
+DROP POLICY IF EXISTS "Employees can create their own leave requests" ON public.leave_requests;
 CREATE POLICY "Employees can create their own leave requests" ON public.leave_requests
   FOR INSERT WITH CHECK (
     EXISTS (
@@ -459,12 +516,14 @@ CREATE POLICY "Employees can create their own leave requests" ON public.leave_re
     )
   );
 
+DROP POLICY IF EXISTS "Admins and managers can update leave requests" ON public.leave_requests;
 CREATE POLICY "Admins and managers can update leave requests" ON public.leave_requests
   FOR UPDATE USING (
     leave_request_belongs_to_organization(id) AND
     (current_user_role() = 'super_admin' OR current_user_role() = 'admin' OR current_user_role() = 'manager')
   );
 
+DROP POLICY IF EXISTS "Admins and managers can delete leave requests" ON public.leave_requests;
 CREATE POLICY "Admins and managers can delete leave requests" ON public.leave_requests
   FOR DELETE USING (
     leave_request_belongs_to_organization(id) AND
@@ -472,6 +531,7 @@ CREATE POLICY "Admins and managers can delete leave requests" ON public.leave_re
   );
 
 -- Leave Requests triggers
+DROP TRIGGER IF EXISTS set_leave_requests_updated_at ON public.leave_requests;
 CREATE TRIGGER set_leave_requests_updated_at
   BEFORE UPDATE ON public.leave_requests
   FOR EACH ROW EXECUTE FUNCTION handle_updated_at();
@@ -501,19 +561,24 @@ CREATE INDEX IF NOT EXISTS idx_invoices_invoice_number ON public.invoices(invoic
 ALTER TABLE public.invoices ENABLE ROW LEVEL SECURITY;
 
 -- Invoices RLS policies
+DROP POLICY IF EXISTS "Users can view invoices in their organization" ON public.invoices;
 CREATE POLICY "Users can view invoices in their organization" ON public.invoices
   FOR SELECT USING (organization_id = current_organization_id());
 
+DROP POLICY IF EXISTS "Admins, managers, and employees can create invoices" ON public.invoices;
 CREATE POLICY "Admins, managers, and employees can create invoices" ON public.invoices
   FOR INSERT WITH CHECK (organization_id = current_organization_id());
 
+DROP POLICY IF EXISTS "Admins, managers, and employees can update invoices" ON public.invoices;
 CREATE POLICY "Admins, managers, and employees can update invoices" ON public.invoices
   FOR UPDATE USING (organization_id = current_organization_id());
 
+DROP POLICY IF EXISTS "Admins and managers can delete invoices" ON public.invoices;
 CREATE POLICY "Admins and managers can delete invoices" ON public.invoices
   FOR DELETE USING (organization_id = current_organization_id() AND (current_user_role() = 'super_admin' OR current_user_role() = 'admin' OR current_user_role() = 'manager'));
 
 -- Invoices triggers
+DROP TRIGGER IF EXISTS set_invoices_updated_at ON public.invoices;
 CREATE TRIGGER set_invoices_updated_at
   BEFORE UPDATE ON public.invoices
   FOR EACH ROW EXECUTE FUNCTION handle_updated_at();
@@ -551,9 +616,11 @@ END;
 $$ LANGUAGE plpgsql STABLE;
 
 -- Payments RLS policies
+DROP POLICY IF EXISTS "Users can view payments in their organization" ON public.payments;
 CREATE POLICY "Users can view payments in their organization" ON public.payments
   FOR SELECT USING (payment_belongs_to_organization(id));
 
+DROP POLICY IF EXISTS "Admins, managers, and employees can create payments" ON public.payments;
 CREATE POLICY "Admins, managers, and employees can create payments" ON public.payments
   FOR INSERT WITH CHECK (
     EXISTS (
@@ -562,9 +629,11 @@ CREATE POLICY "Admins, managers, and employees can create payments" ON public.pa
     )
   );
 
+DROP POLICY IF EXISTS "Admins, managers, and employees can update payments" ON public.payments;
 CREATE POLICY "Admins, managers, and employees can update payments" ON public.payments
   FOR UPDATE USING (payment_belongs_to_organization(id));
 
+DROP POLICY IF EXISTS "Admins and managers can delete payments" ON public.payments;
 CREATE POLICY "Admins and managers can delete payments" ON public.payments
   FOR DELETE USING (
     payment_belongs_to_organization(id) AND
@@ -572,6 +641,7 @@ CREATE POLICY "Admins and managers can delete payments" ON public.payments
   );
 
 -- Payments triggers
+DROP TRIGGER IF EXISTS set_payments_updated_at ON public.payments;
 CREATE TRIGGER set_payments_updated_at
   BEFORE UPDATE ON public.payments
   FOR EACH ROW EXECUTE FUNCTION handle_updated_at();
@@ -597,19 +667,24 @@ CREATE INDEX IF NOT EXISTS idx_documents_uploaded_by ON public.documents(uploade
 ALTER TABLE public.documents ENABLE ROW LEVEL SECURITY;
 
 -- Documents RLS policies
+DROP POLICY IF EXISTS "Users can view documents in their organization" ON public.documents;
 CREATE POLICY "Users can view documents in their organization" ON public.documents
   FOR SELECT USING (organization_id = current_organization_id());
 
+DROP POLICY IF EXISTS "Users can create documents" ON public.documents;
 CREATE POLICY "Users can create documents" ON public.documents
   FOR INSERT WITH CHECK (organization_id = current_organization_id());
 
+DROP POLICY IF EXISTS "Users can update their own documents" ON public.documents;
 CREATE POLICY "Users can update their own documents" ON public.documents
   FOR UPDATE USING (organization_id = current_organization_id() AND uploaded_by = auth.uid());
 
+DROP POLICY IF EXISTS "Admins and managers can delete documents" ON public.documents;
 CREATE POLICY "Admins and managers can delete documents" ON public.documents
   FOR DELETE USING (organization_id = current_organization_id() AND (current_user_role() = 'super_admin' OR current_user_role() = 'admin' OR current_user_role() = 'manager'));
 
 -- Documents triggers
+DROP TRIGGER IF EXISTS set_documents_updated_at ON public.documents;
 CREATE TRIGGER set_documents_updated_at
   BEFORE UPDATE ON public.documents
   FOR EACH ROW EXECUTE FUNCTION handle_updated_at();
@@ -635,16 +710,20 @@ CREATE INDEX IF NOT EXISTS idx_notifications_is_read ON public.notifications(is_
 ALTER TABLE public.notifications ENABLE ROW LEVEL SECURITY;
 
 -- Notifications RLS policies
+DROP POLICY IF EXISTS "Users can view their own notifications" ON public.notifications;
 CREATE POLICY "Users can view their own notifications" ON public.notifications
   FOR SELECT USING (user_id = auth.uid());
 
+DROP POLICY IF EXISTS "Users can update their own notifications" ON public.notifications;
 CREATE POLICY "Users can update their own notifications" ON public.notifications
   FOR UPDATE USING (user_id = auth.uid());
 
+DROP POLICY IF EXISTS "Users can delete their own notifications" ON public.notifications;
 CREATE POLICY "Users can delete their own notifications" ON public.notifications
   FOR DELETE USING (user_id = auth.uid());
 
 -- Notifications triggers
+DROP TRIGGER IF EXISTS set_notifications_updated_at ON public.notifications;
 CREATE TRIGGER set_notifications_updated_at
   BEFORE UPDATE ON public.notifications
   FOR EACH ROW EXECUTE FUNCTION handle_updated_at();
@@ -670,13 +749,16 @@ CREATE INDEX IF NOT EXISTS idx_activity_logs_created_at ON public.activity_logs(
 ALTER TABLE public.activity_logs ENABLE ROW LEVEL SECURITY;
 
 -- Activity Logs RLS policies
+DROP POLICY IF EXISTS "Users can view activity logs in their organization" ON public.activity_logs;
 CREATE POLICY "Users can view activity logs in their organization" ON public.activity_logs
   FOR SELECT USING (organization_id = current_organization_id());
 
+DROP POLICY IF EXISTS "Users can create activity logs" ON public.activity_logs;
 CREATE POLICY "Users can create activity logs" ON public.activity_logs
   FOR INSERT WITH CHECK (organization_id = current_organization_id());
 
 -- Activity Logs are immutable once created
+
 -- ============================================
 -- DASHBOARD HELPER VIEWS
 -- ============================================
@@ -689,9 +771,28 @@ SELECT
   (SELECT COALESCE(SUM(amount), 0) FROM public.invoices i JOIN org_id o ON i.organization_id = o.id WHERE i.status = 'paid') AS total_revenue;
 
 -- ============================================
--- REALTIME ENABLEMENT
+-- REALTIME ENABLEMENT (safe)
 -- ============================================
-ALTER PUBLICATION supabase_realtime ADD TABLE public.tasks;
-ALTER PUBLICATION supabase_realtime ADD TABLE public.notifications;
-ALTER PUBLICATION supabase_realtime ADD TABLE public.projects;
-ALTER PUBLICATION supabase_realtime ADD TABLE public.activity_logs;
+DO $$ BEGIN
+  IF NOT is_table_in_publication('supabase_realtime', 'public', 'tasks') THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.tasks;
+  END IF;
+END $$;
+
+DO $$ BEGIN
+  IF NOT is_table_in_publication('supabase_realtime', 'public', 'notifications') THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.notifications;
+  END IF;
+END $$;
+
+DO $$ BEGIN
+  IF NOT is_table_in_publication('supabase_realtime', 'public', 'projects') THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.projects;
+  END IF;
+END $$;
+
+DO $$ BEGIN
+  IF NOT is_table_in_publication('supabase_realtime', 'public', 'activity_logs') THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.activity_logs;
+  END IF;
+END $$;

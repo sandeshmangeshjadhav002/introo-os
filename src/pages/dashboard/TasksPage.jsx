@@ -1,326 +1,314 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
+import { Plus, Edit2, Trash2, CheckCircle2, AlertCircle, Clock, Calendar, Search, Filter } from 'lucide-react'
 import Card from '../../components/Card'
 import Button from '../../components/Button'
-import { Plus, Trash2, Edit2, CheckCircle2, AlertCircle, Clock, AlertTriangle } from 'lucide-react'
-import { useSupabase } from '../../context/SupabaseContext'
+import Modal from '../../components/Modal'
+import Skeleton from '../../components/Skeleton'
+import EmptyState from '../../components/EmptyState'
+import { useProjects } from '../../hooks/useProjects'
+import { useTasks, useCreateTask, useUpdateTask, useDeleteTask } from '../../hooks/useTasks'
+import { useForm } from 'react-hook-form'
+import { zodResolver } from '@hookform/resolvers/zod'
+import { z } from 'zod'
+import { motion } from 'framer-motion'
 
-const Skeleton = ({ className = '' }) => (
-  <div className={`animate-pulse bg-gray-200 dark:bg-gray-700 rounded-xl ${className}`}></div>
-)
+const taskSchema = z.object({
+  project_id: z.string().min(1, 'Project is required'),
+  title: z.string().min(1, 'Task title is required'),
+  description: z.string().optional(),
+  priority: z.enum(['low', 'medium', 'high', 'urgent']).default('medium'),
+  status: z.enum(['todo', 'in_progress', 'review', 'done', 'cancelled']).default('todo'),
+  due_date: z.string().optional(),
+  assigned_to: z.string().optional().nullable(),
+  estimated_hours: z.number().optional().nullable(),
+  sprint_id: z.string().optional().nullable(),
+})
+
+const columns = [
+  { key: 'todo', label: 'To Do', color: 'from-gray-100 to-gray-200' },
+  { key: 'in_progress', label: 'In Progress', color: 'from-blue-100 to-blue-200' },
+  { key: 'review', label: 'Review', color: 'from-purple-100 to-purple-200' },
+  { key: 'done', label: 'Done', color: 'from-green-100 to-green-200' },
+]
 
 export default function TasksPage() {
-  const { supabase, organization } = useSupabase()
-  const [tasks, setTasks] = useState([])
-  const [projects, setProjects] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(null)
-  const [showModal, setShowModal] = useState(false)
+  const { data: projects, isLoading: projectsLoading } = useProjects()
+  const { data: tasks, isLoading: tasksLoading } = useTasks()
+  const createTask = useCreateTask()
+  const updateTask = useUpdateTask()
+  const deleteTask = useDeleteTask()
+
+  const [isModalOpen, setIsModalOpen] = useState(false)
   const [editingTask, setEditingTask] = useState(null)
-  const [formData, setFormData] = useState({
-    project_id: '',
-    title: '',
-    description: '',
-    priority: 'medium',
-    status: 'todo',
-    due_date: ''
+  const [searchQuery, setSearchQuery] = useState('')
+
+  const { register, handleSubmit, reset, formState: { errors }, setValue } = useForm({
+    resolver: zodResolver(taskSchema),
+    defaultValues: {
+      project_id: '',
+      title: '',
+      description: '',
+      priority: 'medium',
+      status: 'todo',
+      due_date: '',
+      assigned_to: null,
+      estimated_hours: null,
+      sprint_id: null,
+    },
   })
 
-  const loadData = async () => {
+  const onSubmit = async (data) => {
     try {
-      setLoading(true)
-      setError(null)
-      
-      const [tasksRes, projectsRes] = await Promise.all([
-        supabase.from('tasks').select('*, projects(name), users(full_name)').order('created_at', { ascending: false }),
-        supabase.from('projects').select('id, name').order('created_at', { ascending: false })
-      ])
-      if (tasksRes.error) throw tasksRes.error
-      if (projectsRes.error) throw projectsRes.error
-      
-      setTasks(tasksRes.data || [])
-      setProjects(projectsRes.data || [])
-    } catch (err) {
-      setError(err.message)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  useEffect(() => {
-    loadData()
-  }, [supabase])
-
-  const handleSubmit = async (e) => {
-    e.preventDefault()
-    try {
-      setLoading(true)
       if (editingTask) {
-        const { error } = await supabase.from('tasks').update(formData).eq('id', editingTask.id)
-        if (error) throw error
+        await updateTask.mutateAsync({ id: editingTask.id, ...data })
       } else {
-        const { error } = await supabase.from('tasks').insert(formData)
-        if (error) throw error
+        await createTask.mutateAsync(data)
       }
-      setShowModal(false)
+      setIsModalOpen(false)
       setEditingTask(null)
-      setFormData({
-        project_id: '',
-        title: '',
-        description: '',
-        priority: 'medium',
-        status: 'todo',
-        due_date: ''
-      })
-      await loadData()
-    } catch (err) {
-      setError(err.message)
-    } finally {
-      setLoading(false)
+      reset()
+    } catch (error) {
+      console.error('Error saving task:', error)
     }
   }
 
-  const handleDelete = async (id) => {
-    if (!confirm('Are you sure you want to delete this task?')) return
-    try {
-      const { error } = await supabase.from('tasks').delete().eq('id', id)
-      if (error) throw error
-      await loadData()
-    } catch (err) {
-      setError(err.message)
+  const handleEditTask = (task) => {
+    setEditingTask(task)
+    setValue('project_id', task.project_id)
+    setValue('title', task.title)
+    setValue('description', task.description || '')
+    setValue('priority', task.priority)
+    setValue('status', task.status)
+    setValue('due_date', task.due_date || '')
+    setValue('assigned_to', task.assigned_to || null)
+    setValue('estimated_hours', task.estimated_hours || null)
+    setValue('sprint_id', task.sprint_id || null)
+    setIsModalOpen(true)
+  }
+
+  const handleDeleteTask = async (id) => {
+    if (confirm('Are you sure you want to delete this task?')) {
+      try {
+        await deleteTask.mutateAsync(id)
+      } catch (error) {
+        console.error('Error deleting task:', error)
+      }
     }
   }
 
-  const updateStatus = async (id, newStatus) => {
-    try {
-      await supabase.from('tasks').update({ status: newStatus }).eq('id', id)
-      await loadData()
-    } catch (err) {
-      setError(err.message)
-    }
-  }
+  const filteredTasks = tasks?.filter(task => 
+    task.title.toLowerCase().includes(searchQuery.toLowerCase())
+  ) || []
 
   const getPriorityIcon = (priority) => {
     switch(priority) {
-      case 'urgent': return <AlertTriangle size={16} className="text-red-500" />
+      case 'urgent': return <AlertCircle size={16} className="text-red-500" />
       case 'high': return <AlertCircle size={16} className="text-orange-500" />
       case 'medium': return <Clock size={16} className="text-yellow-500" />
-      default: return <CheckCircle2 size={16} className="text-gray-400" />
+      case 'low': return <CheckCircle2 size={16} className="text-green-500" />
+      default: return null
     }
   }
 
   const getPriorityColor = (priority) => {
     switch(priority) {
-      case 'urgent': return 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400'
-      case 'high': return 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400'
-      case 'medium': return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400'
-      default: return 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-400'
+      case 'urgent': return 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
+      case 'high': return 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400'
+      case 'medium': return 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400'
+      case 'low': return 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
+      default: return 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-400'
     }
   }
 
-  const columns = [
-    { status: 'todo', title: 'To Do', color: 'from-gray-100 to-gray-200' },
-    { status: 'in_progress', title: 'In Progress', color: 'from-blue-100 to-blue-200' },
-    { status: 'review', title: 'Review', color: 'from-purple-100 to-purple-200' },
-    { status: 'done', title: 'Done', color: 'from-green-100 to-green-200' }
-  ]
-
-  if (error) {
-    return (
-      <div className="p-8 flex flex-col items-center justify-center min-h-[50vh]">
-        <AlertCircle size={64} className="text-red-500 mb-4" />
-        <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-2">Oops! Something went wrong</h2>
-        <p className="text-gray-600 dark:text-gray-400 mb-4">{error}</p>
-        <Button onClick={loadData}>Try Again</Button>
-      </div>
-    )
+  const getTasksByStatus = (status) => {
+    return filteredTasks.filter(task => task.status === status)
   }
 
   return (
-    <div className="p-8 space-y-8">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">Tasks</h1>
-          <p className="text-gray-600 dark:text-gray-400 mt-2">Manage tasks using Kanban board</p>
+    <div className="space-y-8">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="flex gap-4 flex-1 max-w-md">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
+            <input
+              type="text"
+              placeholder="Search tasks..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-10 pr-4 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
+            />
+          </div>
+          <Button variant="outline">
+            <Filter size={18} className="mr-2" />
+            Filter
+          </Button>
         </div>
-        <Button onClick={() => setShowModal(true)}>
+        <Button onClick={() => { setEditingTask(null); reset(); setIsModalOpen(true); }}>
           <Plus size={18} className="mr-2" />
           Add Task
         </Button>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {columns.map((column) => (
-          <Card key={column.status} className="p-6">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">{column.title}</h3>
-            <div className="space-y-3 min-h-[300px]">
-              {loading ? (
-                Array(3).fill(0).map((_, i) => (
-                  <Skeleton key={i} className="h-24 w-full" />
-                ))
-              ) : tasks.filter(t => t.status === column.status).length > 0 ? (
-                tasks.filter(t => t.status === column.status).map(task => (
-                  <div 
-                    key={task.id} 
-                    className="p-4 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:shadow-md transition-all cursor-move"
-                  >
-                    <div className="flex items-start justify-between mb-2">
-                      <h4 className="font-medium text-gray-900 dark:text-gray-100">{task.title}</h4>
-                      <div className="flex gap-1">
-                        <button onClick={() => { setEditingTask(task); setFormData(task); setShowModal(true); }} className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-500">
-                          <Edit2 size={14} />
-                        </button>
-                        <button onClick={() => handleDelete(task.id)} className="p-1 rounded hover:bg-red-50 dark:hover:bg-red-900/20 text-red-500">
-                          <Trash2 size={14} />
-                        </button>
+        {columns.map(column => (
+          <div key={column.key}>
+            <Card className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100">
+                  {column.label}
+                </h3>
+                <span className="text-sm font-semibold text-gray-500 dark:text-gray-400">
+                  {getTasksByStatus(column.key).length}
+                </span>
+              </div>
+              {tasksLoading || projectsLoading ? (
+                <div className="space-y-3">
+                  {Array(3).fill(0).map((_, i) => <Skeleton key={i} className="h-32" />)}
+                </div>
+              ) : getTasksByStatus(column.key).length > 0 ? (
+                <div className="space-y-3">
+                  {getTasksByStatus(column.key).map(task => (
+                    <motion.div
+                      key={task.id}
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="p-4 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:shadow-md transition-all cursor-pointer"
+                      onClick={() => handleEditTask(task)}
+                    >
+                      <div className="flex items-start justify-between mb-2">
+                        <h4 className="font-semibold text-gray-900 dark:text-gray-100">{task.title}</h4>
+                        <div className="flex gap-1">
+                          <button onClick={(e) => { e.stopPropagation(); handleEditTask(task); }} className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-500">
+                            <Edit2 size={14} />
+                          </button>
+                          <button onClick={(e) => { e.stopPropagation(); handleDeleteTask(task.id); }} className="p-1 rounded hover:bg-red-50 dark:hover:bg-red-900/20 text-red-500">
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
                       </div>
-                    </div>
-                    {task.description && <p className="text-sm text-gray-500 mb-3 line-clamp-2">{task.description}</p>}
-                    <div className="flex items-center gap-2 mb-3">
-                      <span className={`flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${getPriorityColor(task.priority)}`}>
-                        {getPriorityIcon(task.priority)}
-                        {task.priority}
-                      </span>
-                      {task.due_date && (
-                        <span className="text-xs text-gray-500">
-                          Due: {new Date(task.due_date).toLocaleDateString()}
-                        </span>
+                      {task.description && (
+                        <p className="text-sm text-gray-500 dark:text-gray-400 mb-3 line-clamp-2">{task.description}</p>
                       )}
-                    </div>
-                    {task.projects && (
-                      <div className="text-xs text-gray-500">Project: {task.projects.name}</div>
-                    )}
-                    {task.status !== 'done' && (
-                      <div className="mt-3 flex gap-2">
-                        {column.status === 'todo' && (
-                          <button onClick={() => updateStatus(task.id, 'in_progress')} className="text-xs px-3 py-1 rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">
-                            Start
-                          </button>
-                        )}
-                        {column.status === 'in_progress' && (
-                          <>
-                            <button onClick={() => updateStatus(task.id, 'review')} className="text-xs px-3 py-1 rounded-full bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400">
-                              Review
-                            </button>
-                            <button onClick={() => updateStatus(task.id, 'done')} className="text-xs px-3 py-1 rounded-full bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
-                              Complete
-                            </button>
-                          </>
-                        )}
-                        {column.status === 'review' && (
-                          <button onClick={() => updateStatus(task.id, 'done')} className="text-xs px-3 py-1 rounded-full bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
-                            Approve
-                          </button>
+                      <div className="flex items-center gap-2 mb-2">
+                        <span className={`flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${getPriorityColor(task.priority)}`}>
+                          {getPriorityIcon(task.priority)}
+                          {task.priority}
+                        </span>
+                        {task.project && (
+                          <span className="text-xs text-gray-500">{task.project.name}</span>
                         )}
                       </div>
-                    )}
-                  </div>
-                ))
+                      {task.due_date && (
+                        <div className="flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400">
+                          <Calendar size={12} />
+                          {new Date(task.due_date).toLocaleDateString()}
+                        </div>
+                      )}
+                    </motion.div>
+                  ))}
+                </div>
               ) : (
-                <div className="text-center py-8 text-gray-500 dark:text-gray-400">
-                  No tasks in {column.title}
+                <div className="text-center py-12 text-gray-400 dark:text-gray-500">
+                  No tasks in {column.label}
                 </div>
               )}
-            </div>
-          </Card>
+            </Card>
+          </div>
         ))}
       </div>
 
-      {showModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-lg p-8">
-            <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-6">
-              {editingTask ? 'Edit Task' : 'Add New Task'}
-            </h2>
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium mb-2">Project</label>
-                <select 
-                  value={formData.project_id}
-                  onChange={(e) => setFormData({...formData, project_id: e.target.value})}
-                  className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-gray-100"
-                >
-                  <option value="">Select Project</option>
-                  {projects.map(project => (
-                    <option key={project.id} value={project.id}>{project.name}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-2">Task Title</label>
-                <input 
-                  type="text"
-                  required
-                  value={formData.title}
-                  onChange={(e) => setFormData({...formData, title: e.target.value})}
-                  className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-gray-100"
-                  placeholder="Task title"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-2">Description</label>
-                <textarea 
-                  value={formData.description}
-                  onChange={(e) => setFormData({...formData, description: e.target.value})}
-                  rows={3}
-                  className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-gray-100"
-                  placeholder="Task description..."
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium mb-2">Priority</label>
-                  <select 
-                    value={formData.priority}
-                    onChange={(e) => setFormData({...formData, priority: e.target.value})}
-                    className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-gray-100"
-                  >
-                    <option value="low">Low</option>
-                    <option value="medium">Medium</option>
-                    <option value="high">High</option>
-                    <option value="urgent">Urgent</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-2">Status</label>
-                  <select 
-                    value={formData.status}
-                    onChange={(e) => setFormData({...formData, status: e.target.value})}
-                    className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-gray-100"
-                  >
-                    <option value="todo">To Do</option>
-                    <option value="in_progress">In Progress</option>
-                    <option value="review">Review</option>
-                    <option value="done">Done</option>
-                    <option value="cancelled">Cancelled</option>
-                  </select>
-                </div>
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-2">Due Date</label>
-                <input 
-                  type="date"
-                  value={formData.due_date}
-                  onChange={(e) => setFormData({...formData, due_date: e.target.value})}
-                  className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-gray-100"
-                />
-              </div>
-              <div className="flex gap-3 pt-4">
-                <Button 
-                  type="button" 
-                  variant="outline" 
-                  className="flex-1" 
-                  onClick={() => { setShowModal(false); setEditingTask(null); }}
-                >
-                  Cancel
-                </Button>
-                <Button type="submit" className="flex-1" disabled={loading}>
-                  {loading ? 'Saving...' : (editingTask ? 'Update Task' : 'Add Task')}
-                </Button>
-              </div>
-            </form>
+      <Modal 
+        isOpen={isModalOpen} 
+        onClose={() => { setIsModalOpen(false); setEditingTask(null); }} 
+        title={editingTask ? "Edit Task" : "Create New Task"}
+      >
+        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Project *</label>
+            <select
+              {...register('project_id')}
+              className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
+            >
+              <option value="">Select Project</option>
+              {projects?.map(p => (
+                <option key={p.id} value={p.id}>{p.name}</option>
+              ))}
+            </select>
+            {errors.project_id && <p className="text-sm text-red-500 mt-1">{errors.project_id.message}</p>}
           </div>
-        </div>
-      )}
+          
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Title *</label>
+            <input
+              {...register('title')}
+              className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
+              placeholder="Enter task title"
+            />
+            {errors.title && <p className="text-sm text-red-500 mt-1">{errors.title.message}</p>}
+          </div>
+          
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Description</label>
+            <textarea
+              {...register('description')}
+              rows={3}
+              className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
+              placeholder="Enter task description"
+            />
+          </div>
+          
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Priority</label>
+              <select
+                {...register('priority')}
+                className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
+              >
+                <option value="low">Low</option>
+                <option value="medium">Medium</option>
+                <option value="high">High</option>
+                <option value="urgent">Urgent</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Status</label>
+              <select
+                {...register('status')}
+                className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
+              >
+                <option value="todo">To Do</option>
+                <option value="in_progress">In Progress</option>
+                <option value="review">Review</option>
+                <option value="done">Done</option>
+                <option value="cancelled">Cancelled</option>
+              </select>
+            </div>
+          </div>
+          
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Due Date</label>
+            <input
+              type="date"
+              {...register('due_date')}
+              className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
+            />
+          </div>
+          
+          <div className="flex gap-3 pt-4">
+            <Button 
+              type="button" 
+              variant="outline" 
+              className="flex-1" 
+              onClick={() => { setIsModalOpen(false); setEditingTask(null); }}
+            >
+              Cancel
+            </Button>
+            <Button type="submit" className="flex-1" disabled={createTask.isPending || updateTask.isPending}>
+              {createTask.isPending || updateTask.isPending ? 'Saving...' : (editingTask ? 'Update' : 'Create')}
+            </Button>
+          </div>
+        </form>
+      </Modal>
     </div>
   )
 }

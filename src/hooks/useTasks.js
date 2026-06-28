@@ -1,18 +1,36 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useSupabase } from '../context/SupabaseContext'
 
-export function useTasks() {
+export function useTasks(options = {}) {
+  const { projectId, sprintId } = options
   const { supabase, organization } = useSupabase()
 
   return useQuery({
-    queryKey: ['tasks', organization?.id],
+    queryKey: ['tasks', organization?.id, projectId, sprintId],
     queryFn: async () => {
       if (!organization?.id) return []
       
-      const { data, error } = await supabase
+      let query = supabase
         .from('tasks')
-        .select('*, projects(name), assigned_to:users(full_name, email)')
+        .select(`
+          *,
+          project:projects(name, status),
+          assigned_to:users(full_name, email),
+          sprint:sprints(name, status),
+          task_labels:task_labels!left(*, label:labels(*))
+        `)
+        .order('order_index', { ascending: true })
         .order('created_at', { ascending: false })
+
+      if (projectId) {
+        query = query.eq('project_id', projectId)
+      }
+
+      if (sprintId) {
+        query = query.eq('sprint_id', sprintId)
+      }
+
+      const { data, error } = await query
       
       if (error) throw new Error(error.message)
       return data
@@ -37,7 +55,7 @@ export function useCreateTask() {
       return data
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['tasks', organization?.id] })
+      queryClient.invalidateQueries({ queryKey: ['tasks'] })
     },
   })
 }
@@ -59,7 +77,7 @@ export function useUpdateTask() {
       return data
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['tasks', organization?.id] })
+      queryClient.invalidateQueries({ queryKey: ['tasks'] })
     },
   })
 }
@@ -78,7 +96,7 @@ export function useDeleteTask() {
       if (error) throw new Error(error.message)
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['tasks', organization?.id] })
+      queryClient.invalidateQueries({ queryKey: ['tasks'] })
     },
   })
 }

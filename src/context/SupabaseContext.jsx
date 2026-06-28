@@ -24,12 +24,12 @@ export function SupabaseProvider({ children }) {
         // Load user profile
         const { data: profileData } = await supabase
           .from("users")
-          .select("*, organizations(*)")
+          .select("*, organization:organizations(*)")
           .eq("id", session.user.id)
           .single();
         setProfile(profileData);
-        if (profileData?.organizations) {
-          setOrganization(profileData.organizations);
+        if (profileData?.organization) {
+          setOrganization(profileData.organization);
         }
       }
       setLoading(false);
@@ -44,12 +44,12 @@ export function SupabaseProvider({ children }) {
         setUser(session.user);
         const { data: profileData } = await supabase
           .from("users")
-          .select("*, organizations(*)")
+          .select("*, organization:organizations(*)")
           .eq("id", session.user.id)
           .single();
         setProfile(profileData);
-        if (profileData?.organizations) {
-          setOrganization(profileData.organizations);
+        if (profileData?.organization) {
+          setOrganization(profileData.organization);
         }
       } else {
         setUser(null);
@@ -115,7 +115,7 @@ export function SupabaseProvider({ children }) {
       // Refresh profile
       const { data: profileData } = await supabase
         .from("users")
-        .select("*, organizations(*)")
+        .select("*, organization:organizations(*)")
         .eq("id", user.id)
         .single();
       setProfile(profileData);
