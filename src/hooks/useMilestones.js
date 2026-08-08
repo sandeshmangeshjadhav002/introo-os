@@ -14,12 +14,12 @@ export function useMilestones(projectId) {
         .select(
           `
           *, 
-          assigned_to:users(full_name, email),
-          project:projects!inner(name, organization_id)
+          assigned_user:users!milestones_assigned_to_fkey(full_name, email, avatar_url),
+          project:projects(id, name, status, color)
         `,
         )
-        .eq("projects.organization_id", organization.id)
-        .order("due_date", { ascending: true });
+        .eq("organization_id", organization.id)
+        .order("due_date", { ascending: true, nullsFirst: false });
 
       if (projectId) {
         query = query.eq("project_id", projectId);
@@ -28,21 +28,56 @@ export function useMilestones(projectId) {
       const { data, error } = await query;
 
       if (error) throw new Error(error.message);
-      return data;
+      return data || [];
     },
     enabled: !!organization?.id,
+    staleTime: 30_000,
+  });
+}
+
+export function useMilestone(milestoneId) {
+  const { supabase, organization } = useSupabase();
+
+  return useQuery({
+    queryKey: ["milestone", organization?.id, milestoneId],
+    queryFn: async () => {
+      if (!organization?.id || !milestoneId) return null;
+
+      const { data, error } = await supabase
+        .from("milestones")
+        .select(
+          `
+          *, 
+          assigned_user:users!milestones_assigned_to_fkey(full_name, email, avatar_url),
+          project:projects(id, name, status, color)
+        `,
+        )
+        .eq("id", milestoneId)
+        .eq("organization_id", organization.id)
+        .single();
+
+      if (error) throw new Error(error.message);
+      return data;
+    },
+    enabled: !!organization?.id && !!milestoneId,
   });
 }
 
 export function useCreateMilestone() {
-  const { supabase, organization } = useSupabase();
+  const { supabase, organization, user } = useSupabase();
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: async (milestone) => {
+      if (!organization?.id) throw new Error("No organization selected");
+
       const { data, error } = await supabase
         .from("milestones")
-        .insert(milestone)
+        .insert({
+          ...milestone,
+          organization_id: organization.id,
+          created_by: user?.id,
+        })
         .select()
         .single();
 
@@ -53,9 +88,12 @@ export function useCreateMilestone() {
       queryClient.invalidateQueries({
         queryKey: ["milestones", organization?.id],
       });
-      if (data.project_id) {
+      queryClient.invalidateQueries({
+        queryKey: ["milestones", organization?.id, data?.project_id],
+      });
+      if (data?.id) {
         queryClient.invalidateQueries({
-          queryKey: ["milestones", organization?.id, data.project_id],
+          queryKey: ["milestone", organization?.id, data.id],
         });
       }
     },
@@ -63,15 +101,18 @@ export function useCreateMilestone() {
 }
 
 export function useUpdateMilestone() {
-  const { supabase, organization } = useSupabase();
+  const { supabase, organization, user } = useSupabase();
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: async ({ id, ...milestone }) => {
+      if (!organization?.id) throw new Error("No organization selected");
+
       const { data, error } = await supabase
         .from("milestones")
-        .update(milestone)
+        .update({ ...milestone, updated_by: user?.id })
         .eq("id", id)
+        .eq("organization_id", organization.id)
         .select()
         .single();
 
@@ -82,9 +123,12 @@ export function useUpdateMilestone() {
       queryClient.invalidateQueries({
         queryKey: ["milestones", organization?.id],
       });
-      if (data.project_id) {
+      queryClient.invalidateQueries({
+        queryKey: ["milestones", organization?.id, data?.project_id],
+      });
+      if (data?.id) {
         queryClient.invalidateQueries({
-          queryKey: ["milestones", organization?.id, data.project_id],
+          queryKey: ["milestone", organization?.id, data.id],
         });
       }
     },
@@ -97,18 +141,27 @@ export function useDeleteMilestone() {
 
   return useMutation({
     mutationFn: async ({ id, projectId }) => {
-      const { error } = await supabase.from("milestones").delete().eq("id", id);
+      if (!organization?.id) throw new Error("No organization selected");
+
+      const { error } = await supabase
+        .from("milestones")
+        .delete()
+        .eq("id", id)
+        .eq("organization_id", organization.id);
 
       if (error) throw new Error(error.message);
-      return projectId;
+      return { id, projectId };
     },
-    onSuccess: (projectId) => {
+    onSuccess: ({ id, projectId }) => {
       queryClient.invalidateQueries({
         queryKey: ["milestones", organization?.id],
       });
-      if (projectId) {
+      queryClient.invalidateQueries({
+        queryKey: ["milestones", organization?.id, projectId],
+      });
+      if (id) {
         queryClient.invalidateQueries({
-          queryKey: ["milestones", organization?.id, projectId],
+          queryKey: ["milestone", organization?.id, id],
         });
       }
     },

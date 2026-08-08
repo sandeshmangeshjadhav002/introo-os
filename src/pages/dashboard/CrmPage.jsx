@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { Routes, Route, NavLink, useLocation } from "react-router-dom";
 import {
   LayoutDashboard,
@@ -8,23 +7,29 @@ import {
   Target,
   Calendar,
   FileText,
-  Settings,
 } from "lucide-react";
 import CrmDashboard from "./crm/CrmDashboard";
 import ContactsPage from "./crm/ContactsPage";
 import DealsPage from "./crm/DealsPage";
+import CompaniesPage from "./crm/CompaniesPage";
+import LeadsPage from "./crm/LeadsPage";
+import ActivitiesPage from "./crm/ActivitiesPage";
+import ReportsPage from "./crm/ReportsPage";
 
 const navItems = [
-  { path: "", label: "Dashboard", icon: LayoutDashboard },
-  { path: "deals", label: "Deals", icon: TrendingUp },
-  { path: "contacts", label: "Contacts", icon: Users },
-  { path: "companies", label: "Companies", icon: Building2 },
-  { path: "leads", label: "Leads", icon: Target },
-  { path: "activities", label: "Activities", icon: Calendar },
-  { path: "reports", label: "Reports", icon: FileText },
+  { path: "/dashboard/crm", label: "Dashboard", icon: LayoutDashboard },
+  { path: "/dashboard/crm/deals", label: "Deals", icon: TrendingUp },
+  { path: "/dashboard/crm/contacts", label: "Contacts", icon: Users },
+  { path: "/dashboard/crm/companies", label: "Companies", icon: Building2 },
+  { path: "/dashboard/crm/leads", label: "Leads", icon: Target },
+  { path: "/dashboard/crm/activities", label: "Activities", icon: Calendar },
+  { path: "/dashboard/crm/reports", label: "Reports", icon: FileText },
 ];
 
 export default function CrmPage() {
+  const location = useLocation();
+  console.log("CrmPage location:", location);
+
   return (
     <div className="flex -m-6 h-[calc(100vh+3rem)]">
       {/* CRM Sidebar */}
@@ -34,7 +39,7 @@ export default function CrmPage() {
             <NavLink
               key={item.path}
               to={item.path}
-              end={item.path === ""}
+              end={item.path === "/dashboard/crm"}
               className={({ isActive }) =>
                 `flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
                   isActive
@@ -56,58 +61,10 @@ export default function CrmPage() {
           <Route index element={<CrmDashboard />} />
           <Route path="contacts" element={<ContactsPage />} />
           <Route path="deals" element={<DealsPage />} />
-          <Route
-            path="companies"
-            element={
-              <div className="p-8">
-                <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">
-                  Companies
-                </h1>
-                <p className="text-gray-600 dark:text-gray-400 mt-2">
-                  Coming soon...
-                </p>
-              </div>
-            }
-          />
-          <Route
-            path="leads"
-            element={
-              <div className="p-8">
-                <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">
-                  Leads
-                </h1>
-                <p className="text-gray-600 dark:text-gray-400 mt-2">
-                  Coming soon...
-                </p>
-              </div>
-            }
-          />
-          <Route
-            path="activities"
-            element={
-              <div className="p-8">
-                <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">
-                  Activities
-                </h1>
-                <p className="text-gray-600 dark:text-gray-400 mt-2">
-                  Coming soon...
-                </p>
-              </div>
-            }
-          />
-          <Route
-            path="reports"
-            element={
-              <div className="p-8">
-                <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">
-                  Reports
-                </h1>
-                <p className="text-gray-600 dark:text-gray-400 mt-2">
-                  Coming soon...
-                </p>
-              </div>
-            }
-          />
+          <Route path="companies" element={<CompaniesPage />} />
+          <Route path="leads" element={<LeadsPage />} />
+          <Route path="activities" element={<ActivitiesPage />} />
+          <Route path="reports" element={<ReportsPage />} />
         </Routes>
       </div>
     </div>

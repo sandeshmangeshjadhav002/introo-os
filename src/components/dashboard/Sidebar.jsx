@@ -14,11 +14,13 @@ import {
   Shield,
   ChevronLeft,
   ChevronRight,
+  Sparkles,
 } from "lucide-react";
 import { useSupabase } from "../../context/SupabaseContext";
 
 const navItems = [
   { path: "/dashboard", label: "Dashboard", icon: Layout },
+  { path: "/dashboard/ai", label: "AI Assistant", icon: Sparkles },
   { path: "/dashboard/crm", label: "CRM", icon: Users },
   { path: "/dashboard/projects", label: "Projects", icon: Briefcase },
   { path: "/dashboard/tasks", label: "Tasks", icon: Clock },
