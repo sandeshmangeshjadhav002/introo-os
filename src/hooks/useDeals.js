@@ -131,6 +131,7 @@ export function useCreateDeal() {
 
   return useMutation({
     mutationFn: async (deal) => {
+      if (!organization?.id) throw new Error("No organization found. Please ensure you are part of an organization.");
       const { data, error } = await supabase
         .from("deals")
         .insert({

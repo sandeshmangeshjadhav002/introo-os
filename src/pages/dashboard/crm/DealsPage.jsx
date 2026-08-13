@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import {
   Plus,
   Layout,
@@ -36,6 +37,7 @@ const stages = [
 ];
 
 export default function DealsPage() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const { data: deals = [], isLoading } = useDeals();
   const { data: companies = [] } = useCompanies();
   const { data: contacts = [] } = useContacts();
@@ -48,6 +50,13 @@ export default function DealsPage() {
   const [viewMode, setViewMode] = useState("kanban");
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedDeal, setSelectedDeal] = useState(null);
+
+  useEffect(() => {
+    if (searchParams.get("add") === "true") {
+      setIsModalOpen(true);
+      setSearchParams(new URLSearchParams());
+    }
+  }, [searchParams, setSearchParams]);
 
   const {
     register,

@@ -54,6 +54,7 @@ export function useCreateCompany() {
 
   return useMutation({
     mutationFn: async (company) => {
+      if (!organization?.id) throw new Error("No organization found. Please ensure you are part of an organization.");
       const { data, error } = await supabase
         .from('companies')
         .insert({
@@ -79,6 +80,7 @@ export function useUpdateCompany() {
 
   return useMutation({
     mutationFn: async ({ id, ...company }) => {
+      if (!organization?.id) throw new Error("No organization found. Please ensure you are part of an organization.");
       const { data, error } = await supabase
         .from('companies')
         .update({

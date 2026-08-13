@@ -54,6 +54,7 @@ export function useCreateLead() {
 
   return useMutation({
     mutationFn: async (lead) => {
+      if (!organization?.id) throw new Error("No organization found. Please ensure you are part of an organization.");
       const { data, error } = await supabase
         .from('leads')
         .insert({
@@ -79,6 +80,7 @@ export function useUpdateLead() {
 
   return useMutation({
     mutationFn: async ({ id, ...lead }) => {
+      if (!organization?.id) throw new Error("No organization found. Please ensure you are part of an organization.");
       const { data, error } = await supabase
         .from('leads')
         .update({
@@ -106,6 +108,7 @@ export function useConvertLead() {
 
   return useMutation({
     mutationFn: async ({ leadId, dealData, contactData, companyData }) => {
+      if (!organization?.id) throw new Error("No organization found. Please ensure you are part of an organization.");
       // Get lead data
       const { data: lead } = await supabase
         .from('leads')

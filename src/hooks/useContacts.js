@@ -54,6 +54,7 @@ export function useCreateContact() {
 
   return useMutation({
     mutationFn: async (contact) => {
+      if (!organization?.id) throw new Error("No organization found. Please ensure you are part of an organization.");
       const { data, error } = await supabase
         .from('contacts')
         .insert({
@@ -79,6 +80,7 @@ export function useUpdateContact() {
 
   return useMutation({
     mutationFn: async ({ id, ...contact }) => {
+      if (!organization?.id) throw new Error("No organization found. Please ensure you are part of an organization.");
       const { data, error } = await supabase
         .from('contacts')
         .update({

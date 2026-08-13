@@ -26,6 +26,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { motion } from "framer-motion";
+import { toast } from "../../../stores/useToastStore";
 
 const projectSchema = z.object({
   name: z.string().min(1, "Project name is required"),
@@ -74,15 +75,25 @@ export default function ProjectOverview() {
 
   const onSubmit = async (data) => {
     try {
+      const cleanData = {
+        ...data,
+        start_date: data.start_date || null,
+        end_date: data.end_date || null,
+        budget: isNaN(data.budget) ? null : data.budget,
+      };
+
       if (editingProject) {
-        await updateProject.mutateAsync({ id: editingProject.id, ...data });
+        await updateProject.mutateAsync({ id: editingProject.id, ...cleanData });
+        toast.success("Project updated successfully");
       } else {
-        await createProject.mutateAsync(data);
+        await createProject.mutateAsync(cleanData);
+        toast.success("Project created successfully");
       }
       setIsModalOpen(false);
       setEditingProject(null);
       reset();
     } catch (error) {
+      toast.error(error.message);
       console.error("Error saving project:", error);
     }
   };

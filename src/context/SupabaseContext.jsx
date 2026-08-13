@@ -14,42 +14,61 @@ export function SupabaseProvider({ children }) {
   const [organization, setOrganization] = useState(null);
 
   useEffect(() => {
-    // Check active sessions and sets the user
-    const init = async () => {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
+    const handleAuth = async (session) => {
       if (session?.user) {
         setUser(session.user);
-        // Load user profile
-        const { data: profileData } = await supabase
+        let { data: profileData } = await supabase
           .from("users")
           .select("*, organization:organizations(*)")
           .eq("id", session.user.id)
           .single();
+        
         setProfile(profileData);
+        
         if (profileData?.organization) {
           setOrganization(profileData.organization);
-        }
-      }
-      setLoading(false);
-    };
-    init();
+        } else {
+          // AUTO-CREATE FALLBACK: If user somehow skipped org creation
+          try {
+             console.log("Running organization fallback creation...");
+             const orgName = `${session.user.user_metadata?.full_name || 'My'} Organization`;
+             const { data: orgData, error: orgError } = await supabase
+               .from('organizations')
+               .insert({ name: orgName })
+               .select()
+               .single();
+               
+             if (orgError) {
+               console.error("Supabase Org Insert Error:", orgError);
+               throw orgError;
+             }
+               
+             if (orgData) {
+               const { error: userError } = await supabase
+                 .from('users')
+                 .update({ organization_id: orgData.id })
+                 .eq('id', session.user.id);
+                 
+               if (userError) {
+                 console.error("Supabase User Update Error:", userError);
+                 throw userError;
+               }
+                 
+               // Fetch profile again now that they can read their own row!
+               const { data: fixedProfile } = await supabase
+                 .from("users")
+                 .select("*, organization:organizations(*)")
+                 .eq("id", session.user.id)
+                 .single();
 
-    // Listen for changes on auth state
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      if (session?.user) {
-        setUser(session.user);
-        const { data: profileData } = await supabase
-          .from("users")
-          .select("*, organization:organizations(*)")
-          .eq("id", session.user.id)
-          .single();
-        setProfile(profileData);
-        if (profileData?.organization) {
-          setOrganization(profileData.organization);
+               setOrganization(orgData);
+               setProfile(fixedProfile);
+               console.log("Fallback organization created successfully!");
+             }
+          } catch(e) {
+             console.error('Fallback org creation failed', e);
+             alert("We tried to auto-fix your organization but it failed: " + e.message);
+          }
         }
       } else {
         setUser(null);
@@ -57,6 +76,22 @@ export function SupabaseProvider({ children }) {
         setOrganization(null);
       }
       setLoading(false);
+    };
+
+    // Check active sessions and sets the user
+    const init = async () => {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      await handleAuth(session);
+    };
+    init();
+
+    // Listen for changes on auth state
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      await handleAuth(session);
     });
 
     return () => subscription.unsubscribe();
@@ -103,12 +138,16 @@ export function SupabaseProvider({ children }) {
 
     if (orgError) throw new Error(orgError.message);
 
+    // Get current user directly from session to avoid race conditions with React state
+    const { data: { session } } = await supabase.auth.getSession();
+    const currentUser = session?.user || user;
+
     // Then update the user's profile to link to this organization
-    if (user) {
+    if (currentUser) {
       const { error: userError } = await supabase
         .from("users")
         .update({ organization_id: orgData.id })
-        .eq("id", user.id);
+        .eq("id", currentUser.id);
 
       if (userError) throw new Error(userError.message);
 
@@ -116,7 +155,7 @@ export function SupabaseProvider({ children }) {
       const { data: profileData } = await supabase
         .from("users")
         .select("*, organization:organizations(*)")
-        .eq("id", user.id)
+        .eq("id", currentUser.id)
         .single();
       setProfile(profileData);
       setOrganization(orgData);

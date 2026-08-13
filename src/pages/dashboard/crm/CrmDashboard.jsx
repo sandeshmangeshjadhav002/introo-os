@@ -8,8 +8,10 @@ import { useClients } from '../../../hooks/useClients'
 import { useContacts } from '../../../hooks/useContacts'
 import { useDeals } from '../../../hooks/useDeals'
 import { useLeads } from '../../../hooks/useLeads'
+import { useNavigate } from 'react-router-dom'
 
 export default function CrmDashboard() {
+  const navigate = useNavigate()
   const { data: clients, isLoading: clientsLoading } = useClients()
   const { data: contacts, isLoading: contactsLoading } = useContacts()
   const { data: deals, isLoading: dealsLoading } = useDeals()
@@ -122,19 +124,19 @@ export default function CrmDashboard() {
         <Card className="p-6">
           <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-6">Quick Actions</h2>
           <div className="space-y-3">
-            <Button className="w-full justify-start">
+            <Button className="w-full justify-start" onClick={() => navigate('/dashboard/crm/leads?add=true')}>
               <Plus size={18} className="mr-2" />
               Add Lead
             </Button>
-            <Button className="w-full justify-start">
+            <Button className="w-full justify-start" onClick={() => navigate('/dashboard/crm/contacts?add=true')}>
               <Plus size={18} className="mr-2" />
               Add Contact
             </Button>
-            <Button className="w-full justify-start">
+            <Button className="w-full justify-start" onClick={() => navigate('/dashboard/crm/deals?add=true')}>
               <Plus size={18} className="mr-2" />
               Add Deal
             </Button>
-            <Button className="w-full justify-start">
+            <Button className="w-full justify-start" onClick={() => navigate('/dashboard/crm/companies?add=true')}>
               <Plus size={18} className="mr-2" />
               Add Company
             </Button>

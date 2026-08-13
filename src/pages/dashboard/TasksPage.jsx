@@ -31,6 +31,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { motion, AnimatePresence } from "framer-motion";
+import { toast } from "../../stores/useToastStore";
 
 const taskSchema = z.object({
   project_id: z.string().min(1, "Project is required"),
@@ -118,19 +119,22 @@ export default function TasksPage() {
       const cleanData = {
         ...data,
         due_date: data.due_date || null,
-        estimated_hours: data.estimated_hours || null,
+        estimated_hours: isNaN(data.estimated_hours) ? null : data.estimated_hours,
         sprint_id: data.sprint_id || null,
+        progress: isNaN(data.progress) ? 0 : data.progress,
       };
       if (editingTask) {
         await updateTask.mutateAsync({ id: editingTask.id, ...cleanData });
+        toast.success("Task updated successfully");
       } else {
         await createTask.mutateAsync(cleanData);
+        toast.success("Task created successfully");
       }
       setIsModalOpen(false);
       setEditingTask(null);
       reset();
     } catch (error) {
-      alert(`Error saving task: ${error.message}`);
+      toast.error(error.message);
     }
   };
 

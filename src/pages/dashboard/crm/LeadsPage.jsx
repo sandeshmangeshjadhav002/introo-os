@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import {
   Plus,
   Edit,
@@ -27,6 +28,7 @@ import { toast } from "../../../stores/useToastStore";
 import DataTable from "../../../components/crm/DataTable";
 
 export default function LeadsPage() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const { data: leads = [], isLoading } = useLeads();
   const { mutateAsync: createLead } = useCreateLead();
   const { mutateAsync: updateLead } = useUpdateLead();
@@ -39,6 +41,14 @@ export default function LeadsPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedLead, setSelectedLead] = useState(null);
   const [isConvertModalOpen, setIsConvertModalOpen] = useState(false);
+
+  useEffect(() => {
+    if (searchParams.get("add") === "true") {
+      setIsModalOpen(true);
+      // Clean up the URL parameter so it doesn't stay open on refresh
+      setSearchParams(new URLSearchParams());
+    }
+  }, [searchParams, setSearchParams]);
 
   const {
     register,
@@ -103,11 +113,17 @@ export default function LeadsPage() {
 
   const onSubmit = async (data) => {
     try {
+      const cleanData = {
+        ...data,
+        budget: isNaN(data.budget) ? null : data.budget,
+        lead_score: isNaN(data.lead_score) ? 0 : data.lead_score,
+      };
+      
       if (selectedLead) {
-        await updateLead({ id: selectedLead.id, ...data });
+        await updateLead({ id: selectedLead.id, ...cleanData });
         toast.success("Lead updated successfully");
       } else {
-        await createLead(data);
+        await createLead(cleanData);
         toast.success("Lead created successfully");
       }
       setIsModalOpen(false);
@@ -123,7 +139,7 @@ export default function LeadsPage() {
         leadId: selectedLead.id,
         dealData: {
           name: data.deal_name,
-          amount: data.deal_amount,
+          amount: isNaN(data.deal_amount) ? null : data.deal_amount,
           stage: data.deal_stage,
         },
         contactData: data.contact_name

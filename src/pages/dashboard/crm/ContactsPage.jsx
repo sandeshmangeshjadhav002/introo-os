@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import {
   Plus,
   Edit,
@@ -27,6 +28,7 @@ import { toast } from "../../../stores/useToastStore";
 import DataTable from "../../../components/crm/DataTable";
 
 export default function ContactsPage() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const { data: contacts = [], isLoading } = useContacts();
   const { data: companies = [] } = useCompanies();
   const { mutateAsync: createContact } = useCreateContact();
@@ -38,6 +40,13 @@ export default function ContactsPage() {
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedContact, setSelectedContact] = useState(null);
+
+  useEffect(() => {
+    if (searchParams.get("add") === "true") {
+      setIsModalOpen(true);
+      setSearchParams(new URLSearchParams());
+    }
+  }, [searchParams, setSearchParams]);
 
   const {
     register,

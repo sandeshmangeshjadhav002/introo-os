@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import {
   Plus,
   MoreVertical,
@@ -26,6 +27,7 @@ import { toast } from "../../../stores/useToastStore";
 import DataTable from "../../../components/crm/DataTable";
 
 export default function CompaniesPage() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const { data: companies = [], isLoading } = useCompanies();
   const { mutateAsync: createCompany } = useCreateCompany();
   const { mutateAsync: updateCompany } = useUpdateCompany();
@@ -36,6 +38,13 @@ export default function CompaniesPage() {
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedCompany, setSelectedCompany] = useState(null);
+
+  useEffect(() => {
+    if (searchParams.get("add") === "true") {
+      setIsModalOpen(true);
+      setSearchParams(new URLSearchParams());
+    }
+  }, [searchParams, setSearchParams]);
 
   const {
     register,
