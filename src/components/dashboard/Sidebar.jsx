@@ -119,7 +119,7 @@ export default function Sidebar({ isOpen, setIsOpen }) {
                   <p className="font-semibold text-gray-900 dark:text-gray-100 truncate">
                     {profile?.full_name || "User"}
                   </p>
-                  <p className="text-xs text-gray-500 truncate">
+                  <p className="text-xs text-[#64748B] dark:text-gray-400 truncate">
                     {organization?.name || "Organization"}
                   </p>
                 </div>

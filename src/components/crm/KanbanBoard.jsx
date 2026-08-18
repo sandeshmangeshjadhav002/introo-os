@@ -4,32 +4,56 @@ import { motion } from "framer-motion";
 
 export default function KanbanBoard({
   columns = [],
+  stages = [],
   onCardClick,
   onAddCard,
   onColumnDrop,
   onCardDrop,
+  onEditDeal,
+  onArchiveDeal,
+  onDeleteDeal,
 }) {
+  // Support both interfaces — either raw `columns` from the generic board,
+  // or `stages` from DealsPage where each stage has a .deals array.
+  const normalizedColumns =
+    stages && stages.length > 0
+      ? stages.map((stage) => ({
+          ...stage,
+          cards:
+            stage.deals?.map((deal) => ({
+              ...deal,
+              id: deal.id,
+              title: deal.name || deal.title,
+              description: deal.description,
+              amount: deal.amount ?? deal.value,
+              priority: deal.priority,
+              _raw: deal,
+            })) || [],
+        }))
+      : columns;
+
   return (
     <div className="flex gap-4 overflow-x-auto pb-4">
-      {columns.map((column) => (
+      {normalizedColumns.map((column) => (
         <KanbanColumn
           key={column.id}
           column={column}
-          onCardClick={onCardClick}
+          onCardClick={(card) => {
+            if (onCardClick) return onCardClick(card);
+            if (onEditDeal) return onEditDeal(card._raw || card);
+          }}
           onAddCard={onAddCard}
           onCardDrop={onCardDrop}
+          onEditDeal={onEditDeal}
+          onArchiveDeal={onArchiveDeal}
+          onDeleteDeal={onDeleteDeal}
         />
       ))}
     </div>
   );
 }
 
-function KanbanColumn({
-  column,
-  onCardClick,
-  onAddCard,
-  onCardDrop,
-}) {
+function KanbanColumn({ column, onCardClick, onAddCard, onCardDrop }) {
   const [isOver, setIsOver] = useState(false);
 
   const handleDragOver = (e) => {
@@ -141,10 +165,10 @@ function KanbanCard({ card, columnId, onClick }) {
                     card.priority === "urgent"
                       ? "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"
                       : card.priority === "high"
-                      ? "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400"
-                      : card.priority === "medium"
-                      ? "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400"
-                      : "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-400"
+                        ? "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400"
+                        : card.priority === "medium"
+                          ? "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400"
+                          : "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-400"
                   }`}
                 >
                   {card.priority}

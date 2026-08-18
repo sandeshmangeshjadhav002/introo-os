@@ -3,8 +3,40 @@
 @tailwind utilities;
 
 @layer base {
+  html {
+    @apply bg-[#F8FAFC] dark:bg-gray-950;
+  }
+
+  html,
+  body,
+  #root {
+    min-height: 100vh;
+  }
+
   body {
-    @apply bg-bg dark:bg-gray-950 text-text-primary dark:text-white;
+    @apply bg-[#F8FAFC] dark:bg-gray-950 text-[#0F172A] dark:text-gray-100 antialiased;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    @apply text-[#0F172A] dark:text-gray-50;
+  }
+
+  button,
+  input,
+  textarea,
+  select {
+    @apply text-[#0F172A] dark:text-gray-100;
+  }
+
+  input::placeholder,
+  textarea::placeholder,
+  select:invalid {
+    @apply text-gray-400 dark:text-gray-500;
   }
 }
 

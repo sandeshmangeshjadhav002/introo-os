@@ -7,7 +7,7 @@ describe('Button', () => {
     render(<Button>Click me</Button>);
     const button = screen.getByRole('button', { name: /click me/i });
     expect(button).toBeInTheDocument();
-    expect(button).toHaveClass('bg-primary');
+    expect(button).toHaveClass('bg-[#2563EB]');
     expect(button).toHaveClass('px-6 py-3'); // default md size
   });
 

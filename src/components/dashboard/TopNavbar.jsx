@@ -143,10 +143,10 @@ export default function TopNavbar({ setIsOpen }) {
                         className={`p-4 border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer flex items-start gap-3 ${!notif.is_read ? "bg-blue-50 dark:bg-blue-900/20" : ""}`}
                         onClick={() => markAsRead(notif.id)}
                       >
-                        <div className="w-10 h-10 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
+                        <div className="w-10 h-10 rounded-full bg-[#2563EB]/10 dark:bg-[#2563EB]/20 flex items-center justify-center">
                           <Bell
                             size={18}
-                            className="text-blue-600 dark:text-blue-400"
+                            className="text-[#2563EB] dark:text-[#60A5FA]"
                           />
                         </div>
                         <div className="flex-1">
@@ -175,7 +175,7 @@ export default function TopNavbar({ setIsOpen }) {
               onClick={() => setShowDropdown(!showDropdown)}
               className="flex items-center gap-3 px-4 py-2.5 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 transition-all"
             >
-              <div className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-600 to-purple-600 flex items-center justify-center text-white font-semibold">
+              <div className="w-9 h-9 rounded-full bg-gradient-to-br from-[#2563EB] to-purple-600 flex items-center justify-center text-white font-semibold">
                 {getInitials(profile?.full_name)}
               </div>
               <div className="hidden md:block text-left">

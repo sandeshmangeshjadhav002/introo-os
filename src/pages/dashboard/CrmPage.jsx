@@ -27,14 +27,16 @@ const navItems = [
 ];
 
 export default function CrmPage() {
-  const location = useLocation();
-  console.log("CrmPage location:", location);
-
   return (
-    <div className="flex -m-6 h-[calc(100vh+3rem)]">
+    <div className="flex flex-col lg:flex-row -m-6 min-h-[calc(100vh-8rem)]">
       {/* CRM Sidebar */}
-      <aside className="w-64 border-r border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-900/50 p-6">
-        <nav className="space-y-1">
+      <aside className="w-full lg:w-64 lg:shrink-0 border-b lg:border-b-0 lg:border-r border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-4 lg:p-6 overflow-x-auto lg:overflow-visible">
+        <div className="mb-4 hidden lg:block">
+          <h2 className="text-lg font-semibold text-[#0F172A] dark:text-gray-100">
+            CRM
+          </h2>
+        </div>
+        <nav className="flex lg:flex-col gap-1 lg:space-y-1 whitespace-nowrap">
           {navItems.map((item) => (
             <NavLink
               key={item.path}
@@ -43,13 +45,13 @@ export default function CrmPage() {
               className={({ isActive }) =>
                 `flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
                   isActive
-                    ? "bg-blue-500 text-white font-medium"
-                    : "text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-800"
+                    ? "bg-[#2563EB] text-white font-medium shadow-sm"
+                    : "text-[#64748B] dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-[#0F172A] dark:hover:text-gray-100"
                 }`
               }
             >
-              <item.icon size={20} />
-              <span>{item.label}</span>
+              <item.icon size={20} className="shrink-0" />
+              <span className="font-medium">{item.label}</span>
             </NavLink>
           ))}
         </nav>
