@@ -1,5 +1,6 @@
-import { createContext, useContext, useState, useEffect } from "react";
+import { createContext, useContext, useState, useEffect, useRef } from "react";
 import { supabase } from "../lib/supabase";
+import { toast } from "../stores/useToastStore";
 
 const SupabaseContext = createContext();
 
@@ -12,62 +13,115 @@ export function SupabaseProvider({ children }) {
   const [loading, setLoading] = useState(true);
   const [profile, setProfile] = useState(null);
   const [organization, setOrganization] = useState(null);
+  const fallbackTriedRef = useRef(false);
 
   useEffect(() => {
     const handleAuth = async (session) => {
       if (session?.user) {
         setUser(session.user);
-        let { data: profileData } = await supabase
+        let { data: profileData, error: profileError } = await supabase
           .from("users")
           .select("*, organization:organizations(*)")
           .eq("id", session.user.id)
-          .single();
-        
-        setProfile(profileData);
-        
+          .maybeSingle();
+
+        if (profileError) {
+          console.error("Supabase Profile Fetch Error:", profileError);
+          setLoading(false);
+          return;
+        }
+
+        setProfile(profileData || null);
+
         if (profileData?.organization) {
           setOrganization(profileData.organization);
-        } else {
-          // AUTO-CREATE FALLBACK: If user somehow skipped org creation
+        } else if (
+          !fallbackTriedRef.current &&
+          profileData?.id === session.user.id
+        ) {
+          fallbackTriedRef.current = true;
+          const orgName = `${session.user.user_metadata?.full_name || session.user.email?.split("@")[0] || "My"} Organization`;
           try {
-             console.log("Running organization fallback creation...");
-             const orgName = `${session.user.user_metadata?.full_name || 'My'} Organization`;
-             const { data: orgData, error: orgError } = await supabase
-               .from('organizations')
-               .insert({ name: orgName })
-               .select()
-               .single();
-               
-             if (orgError) {
-               console.error("Supabase Org Insert Error:", orgError);
-               throw orgError;
-             }
-               
-             if (orgData) {
-               const { error: userError } = await supabase
-                 .from('users')
-                 .update({ organization_id: orgData.id })
-                 .eq('id', session.user.id);
-                 
-               if (userError) {
-                 console.error("Supabase User Update Error:", userError);
-                 throw userError;
-               }
-                 
-               // Fetch profile again now that they can read their own row!
-               const { data: fixedProfile } = await supabase
-                 .from("users")
-                 .select("*, organization:organizations(*)")
-                 .eq("id", session.user.id)
-                 .single();
+            let orgId = null;
 
-               setOrganization(orgData);
-               setProfile(fixedProfile);
-               console.log("Fallback organization created successfully!");
-             }
-          } catch(e) {
-             console.error('Fallback org creation failed', e);
-             alert("We tried to auto-fix your organization but it failed: " + e.message);
+            // Attempt 1: Plain SQL insert via client (may still fail due to legacy RLS)
+            try {
+              const tempId = crypto.randomUUID();
+              const { error: orgError } = await supabase
+                .from("organizations")
+                .insert({ id: tempId, name: orgName });
+
+              if (!orgError) {
+                orgId = tempId;
+              } else {
+                console.warn(
+                  "org insert attempt 1 failed, trying RPC:",
+                  orgError,
+                );
+              }
+            } catch (insertErr) {
+              console.warn("org insert attempt 1 error:", insertErr);
+            }
+
+            // Attempt 2: SECURITY DEFINER RPC — GUARANTEED to succeed because it
+            // runs with postgres privileges and bypasses RLS entirely.
+            if (!orgId) {
+              const { data: rpcResult, error: rpcError } = await supabase.rpc(
+                "bootstrap_create_first_organization",
+                {
+                  org_name: orgName,
+                },
+              );
+
+              if (rpcError) {
+                console.error(
+                  "RPC bootstrap_create_first_organization failed:",
+                  rpcError,
+                );
+                throw rpcError;
+              }
+              if (!rpcResult) {
+                throw new Error("Organization bootstrap RPC returned null");
+              }
+              orgId = rpcResult;
+            }
+
+            // Ensure user is LINKED to org (RPC already does this, but be safe)
+            if (orgId) {
+              const { error: linkError } = await supabase
+                .from("users")
+                .update({ organization_id: orgId })
+                .eq("id", session.user.id);
+
+              if (linkError && !/duplicate|already/i.test(linkError.message)) {
+                throw linkError;
+              }
+            }
+
+            // Read back the fresh profile (with org join)
+            const { data: fixedProfile } = await supabase
+              .from("users")
+              .select("*, organization:organizations(*)")
+              .eq("id", session.user.id)
+              .maybeSingle();
+
+            if (fixedProfile) {
+              setProfile(fixedProfile);
+              if (fixedProfile.organization) {
+                setOrganization(fixedProfile.organization);
+                toast.success("Organization created — you're all set!");
+              }
+            } else {
+              throw new Error(
+                "Profile could not be refreshed after org create",
+              );
+            }
+          } catch (e) {
+            console.error("Fallback org creation failed", e);
+            toast.error(
+              "You don't have an organization yet. Please ask your admin for an invite or create an organization manually.",
+              { duration: 10000 },
+            );
           }
         }
       } else {
@@ -139,7 +193,9 @@ export function SupabaseProvider({ children }) {
     if (orgError) throw new Error(orgError.message);
 
     // Get current user directly from session to avoid race conditions with React state
-    const { data: { session } } = await supabase.auth.getSession();
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
     const currentUser = session?.user || user;
 
     // Then update the user's profile to link to this organization
